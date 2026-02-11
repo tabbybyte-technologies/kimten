@@ -1,4 +1,9 @@
 # 🐈 kimten
+[![CI](https://github.com/tabbybyte-technologies/kimten/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tabbybyte-technologies/kimten/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/tabbybyte-technologies/kimten/branch/main/graph/badge.svg)](https://codecov.io/gh/tabbybyte-technologies/kimten)
+[![npm](https://img.shields.io/npm/v/%40tabbybyte%2Fkimten)](https://www.npmjs.com/package/@tabbybyte/kimten)
+[![license](https://img.shields.io/npm/l/%40tabbybyte%2Fkimten)](LICENSE)
+
 🐾 _A tiny agent loop with paws_ 🐾
 
 Kimten is a minimal micro-agent library: a thin wrapper over the **[Agent interface in Vercel AI SDK Core v6+](https://ai-sdk.dev/docs/agents)**.
