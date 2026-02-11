@@ -14,7 +14,7 @@ It’s meant to feel like a smart helper, not a framework.
 
 ## ✅ What it does
 
-- Runs a simple agent loop (bounded by `hops`)
+- Runs a simple, single-agent loop (bounded by `hops`)
 - Lets the model call your tools (`toys`)
 - Keeps short-term conversation memory (in-process, per instance)
 - Supports optional structured output via Zod
@@ -24,7 +24,7 @@ It’s meant to feel like a smart helper, not a framework.
 - No planners/graphs/state machines
 - No streaming API surface
 - No persistence or long-term memory
-- No plugin system or orchestration runtime
+- No plugin system or multi-agent orchestration
 
 ---
 
@@ -70,6 +70,8 @@ const cat = Kimten({
   toys: {
     add: async ({ a, b }) => a + b,
   },
+
+  personality: 'You are a helpful assistant.',
 
   hops: 10,
 });
@@ -123,7 +125,7 @@ Create a new instance.
   * async function shorthand: `async (args) => result`
   * object form: `{ inputSchema?, description?, strict?, execute }`
   default: `{}`
-* `personality` → system prompt / behavior description (default: `"You are a helpful assistant."`)
+* `personality` → system prompt / behavior description (default: `'You are a helpful assistant.'`)
 * `hops` → max agent loop steps (default: `10`)  
   prevents infinite zoomies 🌀
 
