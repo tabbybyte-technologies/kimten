@@ -1,7 +1,7 @@
 {
   "name": "kimten",
   "version": "0.1.0",
-  "description": "Tiny agent wrapper over Vercel AI SDK Core",
+  "description": "A micro-agent library: thin wrapper over the Agent interface from Vercel's AI SDK Core v6+",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -21,6 +21,10 @@
     "tools",
     "vercel-ai"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tabbybyte-technologies/kimten.git"
+  },
   "peerDependencies": {
     "ai": ">=6",
     "zod": ">=3"
@@ -30,7 +34,7 @@
     "zod": "^3.25.76"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "license": "MIT"
 }
