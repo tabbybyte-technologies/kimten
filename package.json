@@ -1,7 +1,7 @@
 {
   "name": "@tabbybyte/kimten",
-  "version": "0.1.1",
-    "publishConfig": {
+  "version": "0.1.2",
+  "publishConfig": {
     "access": "public"
   },
   "description": "A micro-agent library: thin wrapper over the Agent interface from Vercel's AI SDK Core v6+",
