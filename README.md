@@ -54,10 +54,16 @@ Perfect for:
 Feed the cat some treats:
 
 ```bash
-npm i kimten ai zod @ai-sdk/openai
+npm i @tabbybyte/kimten ai zod @ai-sdk/openai
 ```
 
 That’s it. No ceremony. No rituals. 🍗
+
+### Requirements
+
+- Node `>=22`
+- AI SDK Core `>=6`
+- Zod `>=3`
 
 ---
 
@@ -68,7 +74,7 @@ Summon your little helper (with or without `toys`) and let it `play`.
 ```js
 import { openai } from '@ai-sdk/openai'; // or, any other provider
 import { z } from 'zod';
-import Kimten from 'kimten';
+import Kimten from '@tabbybyte/kimten';
 
 const cat = Kimten({
   brain: openai('gpt-4o-mini'), // or, any other available model
@@ -153,6 +159,12 @@ Create a new cat.
 * `hops` → max agent loop steps (default: `10`)  
   prevents infinite zoomies 🌀
 
+### Tool semantics (important)
+
+- Tool inputs are validated only if you provide `inputSchema` (shorthand tools accept anything).
+- Tool results should be JSON-serializable; `undefined` becomes `null`.
+- If a tool throws, Kimten returns `{ error, toolName }` as the tool result (it does not re-throw).
+
 ### Returns
 
 * `play(input, schema?)`
@@ -167,9 +179,17 @@ Create a new cat.
 
 ---
 
-## 🧩 Design Philosophy
+## 🧩 Design Philosophy & Vibes
 
 Kimten intentionally avoids “big agent framework energy”.
+
+It’s meant to be:
+
+* small
+* opinionated
+* dependency-light
+* short-term memory by design
+* easy to embed anywhere
 
 No:
 
@@ -180,6 +200,7 @@ No:
 * persistence/storage
 * hidden background processes
 * TypeScript runtime/build nonsense
+* full fledged orchestration system
 
 If you need those… use something heavier.
 
@@ -226,6 +247,22 @@ toys: {
 }
 ```
 
+### Small “real” example
+
+```js
+toys: {
+  fetchJson: {
+    description: 'Fetch JSON from a URL (GET).',
+    inputSchema: z.object({ url: z.string().url() }),
+    async execute({ url }) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+  },
+}
+```
+
 ### Structured output = sanity
 
 Use Zod schemas whenever possible.  
@@ -239,28 +276,6 @@ If you need 50+ steps, you probably want a planner, not Kimten.
 
 Fresh task? Call `forget()`.  
 Cats don’t hold grudges (or context). 🐾
-
----
-
-## 🐾 Vibes
-
-Kimten is:
-
-* small
-* opinionated
-* dependency-light
-* short-memory by design
-* easy to embed anywhere
-
-It’s not trying to be LangChain or a full orchestration system.
-
-It’s just a cat.
-
-A helpful one.
-
-In your terminal.
-
-Typing. 🐈‍⬛
 
 ---
 
