@@ -1,3 +1,42 @@
+/**
+ * @module kimten.test
+ * @description
+ * Unit tests for the Kimten library, covering:
+ * - Memory behavior and FIFO eviction via createMemory()
+ * - Prompt/message building via buildMessages()
+ * - Tool normalization and validation via normalizeToys()
+ * - Kimten factory validation, behavior, and caching (play/forget)
+ *
+ * Helpers:
+ * @function createFakeModel
+ * @param {Object} opts
+ * @param {string} opts.text - Text to return as the model generation result.
+ * @returns {Object} Minimal fake model implementation compatible with tests.
+ *
+ * @function createSpyModel
+ * @param {Object} opts
+ * @param {string} opts.text - Text to return as the model generation result.
+ * @param {Array} opts.prompts - Array to which invoked prompts will be pushed.
+ * @returns {Object} Fake model that records prompts passed to doGenerate().
+ *
+ * Test coverage highlights:
+ * - createMemory enforces MEMORY_LIMIT and supports clear() and list().
+ * - buildMessages prepends a system prompt to user messages.
+ * - normalizeToys:
+ *   - wraps plain function tools into { execute() } form
+ *   - accepts object-form tool definitions with description, inputSchema, strict flag
+ *   - serializes thrown errors and circular/undefined results safely
+ *   - rejects non-plain objects and invalid property types
+ * - Kimten:
+ *   - validates constructor arguments (config object, brain, personality, hops)
+ *   - exposes only play() and forget() methods
+ *   - enforces play() input type (string)
+ *   - supports optional personality and toys
+ *   - returns structured output when given a Zod schema and caches structured agents
+ *   - forget() clears conversation memory so subsequent prompts omit assistant history
+ * 
+ * Note: These tests are not exhaustive but cover key behaviors and edge cases of the Kimten library.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
@@ -13,6 +52,27 @@ function createFakeModel({ text }) {
     modelId: 'fake',
     supportedUrls: {},
     async doGenerate() {
+      return {
+        finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        content: [{ type: 'text', text }],
+        warnings: [],
+      };
+    },
+    async doStream() {
+      throw new Error('not used');
+    },
+  };
+}
+
+function createSpyModel({ text, prompts }) {
+  return {
+    specificationVersion: 'v2',
+    provider: 'test',
+    modelId: 'fake',
+    supportedUrls: {},
+    async doGenerate(options) {
+      prompts.push(options.prompt);
       return {
         finishReason: 'stop',
         usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
@@ -104,8 +164,60 @@ test('normalizeToys rejects object-form entries without execute', () => {
   );
 });
 
+test('normalizeToys returns empty map for nullish input', () => {
+  assert.deepEqual(normalizeToys(undefined), {});
+  assert.deepEqual(normalizeToys(null), {});
+});
+
+test('normalizeToys rejects non-plain objects', () => {
+  assert.throws(() => normalizeToys([]), /must be an object map/i);
+  assert.throws(() => normalizeToys(new Map()), /must be an object map/i);
+});
+
+test('normalizeToys validates tool description and strict types', () => {
+  assert.throws(
+    () =>
+      normalizeToys({
+        bad: { description: 1, async execute() {} },
+      }),
+    /description must be a string/i
+  );
+
+  assert.throws(
+    () =>
+      normalizeToys({
+        bad: { strict: 'no', async execute() {} },
+      }),
+    /strict must be a boolean/i
+  );
+});
+
+test('normalizeToys serializes undefined results as null', async () => {
+  const wrapped = normalizeToys({
+    noop: async () => undefined,
+  });
+
+  const out = await wrapped.noop.execute({});
+  assert.equal(out, null);
+});
+
+test('normalizeToys serializes circular tool results safely', async () => {
+  const wrapped = normalizeToys({
+    circular: async () => {
+      const obj = {};
+      obj.self = obj;
+      return obj;
+    },
+  });
+
+  const out = await wrapped.circular.execute({});
+  assert.equal(typeof out.value, 'string');
+});
+
 test('Kimten validates constructor config', () => {
   assert.throws(() => Kimten(null), /requires a config object/i);
+  assert.throws(() => Kimten({ toys: {} }), /brain/i);
+  assert.throws(() => Kimten({ brain: 1 }), /brain/i);
   assert.throws(() => Kimten({ brain: {}, toys: {}, personality: '' }), /personality/i);
   assert.throws(() => Kimten({ brain: {}, toys: {}, personality: 'x', hops: 0 }), /hops/i);
 });
@@ -160,4 +272,44 @@ test('Kimten play(input, schema) returns structured output via AI SDK output', a
 
   const out = await cat.play('extract name', z.object({ name: z.string() }));
   assert.deepEqual(out, { name: 'kim' });
+});
+
+test('Kimten caches structured agents for the same schema instance', async () => {
+  const cat = Kimten({
+    brain: createFakeModel({ text: '{"name":"kim"}' }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  const schema = z.object({ name: z.string() });
+  const out1 = await cat.play('extract name', schema);
+  const out2 = await cat.play('extract name again', schema);
+
+  assert.deepEqual(out1, { name: 'kim' });
+  assert.deepEqual(out2, { name: 'kim' });
+});
+
+test('Kimten forget clears conversation memory', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('one');
+  await cat.play('two');
+  cat.forget();
+  await cat.play('three');
+
+  assert.equal(prompts.length, 3);
+
+  const roles1 = prompts[0].map((m) => m.role);
+  const roles2 = prompts[1].map((m) => m.role);
+  const roles3 = prompts[2].map((m) => m.role);
+
+  assert.ok(roles2.includes('assistant'));
+  assert.ok(!roles3.includes('assistant'));
+  assert.deepEqual(roles1, ['system', 'system', 'user']);
+  assert.deepEqual(roles3, ['system', 'system', 'user']);
 });
