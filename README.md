@@ -1,9 +1,10 @@
 # 🐈 kimten
-🐾 _A tiny agent loop with paws_ 🐾
+🐾 _**A tiny agent loop with paws**_ 🐾
 
-[![CI](https://github.com/tabbybyte-technologies/kimten/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tabbybyte-technologies/kimten/actions/workflows/ci.yml)
+[![build](https://github.com/tabbybyte-technologies/kimten/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tabbybyte-technologies/kimten/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/tabbybyte-technologies/kimten/branch/main/graph/badge.svg)](https://codecov.io/gh/tabbybyte-technologies/kimten)
 [![npm](https://img.shields.io/npm/v/%40tabbybyte%2Fkimten)](https://www.npmjs.com/package/@tabbybyte/kimten)
+[![last commit](https://img.shields.io/github/last-commit/tabbybyte-technologies/kimten)](https://github.com/tabbybyte-technologies/kimten/commits/main)
 [![license](https://img.shields.io/npm/l/%40tabbybyte%2Fkimten)](LICENSE)
 
 
