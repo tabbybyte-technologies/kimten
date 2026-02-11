@@ -145,7 +145,10 @@ Create a new cat.
 
 ### Optional (extra whiskers)
 
-* `toys` → object map of async functions (tools the model may call), default: `{}`
+* `toys` → object map of tool definitions. Each entry can be:
+  * async function shorthand: `async (args) => result`
+  * object form: `{ inputSchema?, description?, strict?, execute }`
+  default: `{}`
 * `personality` → system prompt / behavior description (default: `"You are a helpful assistant."`)
 * `hops` → max agent loop steps (default: `10`)  
   prevents infinite zoomies 🌀
@@ -194,7 +197,7 @@ Refer to https://ai-sdk.dev/docs/foundations/providers-and-models
 
 ### Add tools freely
 
-Tools are just async functions:
+Tools can stay simple:
 
 ```js
 toys: {
@@ -206,6 +209,22 @@ toys: {
 ```
 
 The model decides when to use them.
+
+For stronger arg validation and better tool selection, use object form:
+
+```js
+import { z } from 'zod';
+
+toys: {
+  add: {
+    description: 'Add two numbers.',
+    inputSchema: z.object({ a: z.number(), b: z.number() }),
+    async execute({ a, b }) {
+      return a + b;
+    },
+  },
+}
+```
 
 ### Structured output = sanity
 

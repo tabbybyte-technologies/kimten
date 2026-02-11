@@ -65,6 +65,22 @@ test('normalizeToys validates and wraps tools', async () => {
   assert.equal(out, 5);
 });
 
+test('normalizeToys supports object-form tool definitions', async () => {
+  const wrapped = normalizeToys({
+    add: {
+      description: 'Adds two numbers.',
+      inputSchema: z.object({ a: z.number(), b: z.number() }),
+      async execute({ a, b }) {
+        return a + b;
+      },
+    },
+  });
+
+  assert.equal(typeof wrapped.add.execute, 'function');
+  const out = await wrapped.add.execute({ a: 2, b: 3 });
+  assert.equal(out, 5);
+});
+
 test('normalizeToys serializes tool errors safely', async () => {
   const wrapped = normalizeToys({
     boom: async () => {
@@ -78,7 +94,14 @@ test('normalizeToys serializes tool errors safely', async () => {
 });
 
 test('normalizeToys rejects non-function tool entries', () => {
-  assert.throws(() => normalizeToys({ bad: 1 }), /must be a function/i);
+  assert.throws(() => normalizeToys({ bad: 1 }), /must be a function or an object/i);
+});
+
+test('normalizeToys rejects object-form entries without execute', () => {
+  assert.throws(
+    () => normalizeToys({ bad: { inputSchema: z.object({ a: z.number() }) } }),
+    /must include execute/i
+  );
 });
 
 test('Kimten validates constructor config', () => {
