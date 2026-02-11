@@ -1,0 +1,16 @@
+node_modules/
+test/
+specs/
+.vscode/
+.idea/
+.git/
+.github/
+
+*.log
+.env
+.env.*
+coverage/
+dist/
+build/
+
+SPECS.md

@@ -1,0 +1,36 @@
+{
+  "name": "kimten",
+  "version": "0.1.0",
+  "description": "Tiny agent wrapper over Vercel AI SDK Core",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "lib"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "tools",
+    "vercel-ai"
+  ],
+  "peerDependencies": {
+    "ai": ">=6",
+    "zod": ">=3"
+  },
+  "devDependencies": {
+    "ai": "^6.0.0-beta.89",
+    "zod": "^3.25.76"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
