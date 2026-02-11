@@ -1,6 +1,6 @@
 {
   "name": "kimten",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A micro-agent library: thin wrapper over the Agent interface from Vercel's AI SDK Core v6+",
   "type": "module",
   "main": "index.js",
