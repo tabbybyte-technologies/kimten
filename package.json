@@ -7,11 +7,16 @@
   "description": "A micro-agent library: thin wrapper over the Agent interface from Vercel's AI SDK Core v6+",
   "type": "module",
   "main": "index.js",
+  "types": "index.d.ts",
   "exports": {
-    ".": "./index.js"
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
   },
   "files": [
     "index.js",
+    "index.d.ts",
     "lib"
   ],
   "scripts": {
