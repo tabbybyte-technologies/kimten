@@ -99,7 +99,7 @@ cat.forget();
 
 ---
 
-## 🧠 Mental Model
+## 💭 Mental Model
 
 Kimten is basically:
 
@@ -125,15 +125,15 @@ Each instance keeps short-term chat memory, so follow-up prompts naturally refer
 Create a new instance.
 
 #### Required
-* `brain` → AI SDK model instance
+* 🧠 `brain` → AI SDK model instance
 
 #### Optional
 
-* `toys` → object map of toy (tool) definitions. Each entry is:
+* 🎱 `toys` → object map of toy (tool) definitions. Each entry is:
   * object form: `{ inputSchema?, description?, strict?, execute }`
   default: `{}`
-* `personality` → system instructions / prompt for overall behavior description (default: `'You are a helpful assistant.'`)
-* `hops` → max agent loop steps (default: `10`) - prevents infinite zoomies 🌀
+* 🕵️‍♂️ `personality` → system instructions / prompt for overall behavior description (default: `'You are a helpful assistant.'`)
+* 🌀 `hops` → max agent loop steps (default: `10`) - prevents infinite zoomies
 
 #### Toy semantics
 
@@ -144,15 +144,17 @@ Create a new instance.
 
 #### Returns
 
-* `play(input, schema?)`
+* `play(input, schema?, context?)`
 
   * runs the agent  
   * uses short-term memory automatically  
   * optional Zod schema for structured output
+  * optional plain object context injected into the current call prompt as JSON (with basic redaction/truncation guards)
+  * context is ephemeral per `play()` call and is not persisted in memory
 
 * `forget()`
 
-  * clears short-term memory/context
+  * clears short-term memory
 
 ---
 
@@ -164,7 +166,7 @@ For the `brain` part, feel free to use any compatible provider and their models.
 
 ❗ Note that not all providers (and models) may work out the box with Kimten, particularly for structured output.
 
-💡 Refer to the AI SDK docs: **[providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models)**.
+💡 Refer to the AI SDK docs for details: **[providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models)**.
 
 ### Add toys freely
 

@@ -21,8 +21,12 @@ export type KimtenConfig = {
 };
 
 export type KimtenAgent = {
-  play(input: string): Promise<string>;
-  play<S extends ZodTypeAny>(input: string, schema: S): Promise<ZodInfer<S>>;
+  play(input: string, schema?: null, context?: Record<string, unknown> | null): Promise<string>;
+  play<S extends ZodTypeAny>(
+    input: string,
+    schema: S,
+    context?: Record<string, unknown> | null
+  ): Promise<ZodInfer<S>>;
   forget(): void;
 };
 

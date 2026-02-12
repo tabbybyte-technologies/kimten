@@ -309,3 +309,63 @@ test('Kimten forget clears conversation memory', async () => {
   assert.deepEqual(roles1, ['system', 'user']);
   assert.deepEqual(roles3, ['system', 'user']);
 });
+
+test('Kimten play accepts optional context object', async () => {
+  const cat = Kimten({
+    brain: createFakeModel({ text: 'ok' }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  const out = await cat.play('hi', null, { requestId: 'req-1' });
+  assert.equal(out, 'ok');
+});
+
+test('Kimten injects context into the user prompt content', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('hello', null, {
+    requestId: 'req-1',
+    token: 'super-secret-token',
+  });
+
+  const userMessage = prompts[0].find((m) => m.role === 'user');
+  assert.ok(userMessage);
+  const userText = Array.isArray(userMessage.content)
+    ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : userMessage.content;
+  assert.match(userText, /Context \(JSON\):/i);
+  assert.match(userText, /"requestId": "req-1"/);
+  assert.match(userText, /"token": "\[REDACTED\]"/);
+  assert.match(userText, /User message:\nhello/);
+});
+
+test('Kimten context is ephemeral and not persisted across plays', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('first', null, { requestId: 'req-1' });
+  await cat.play('second');
+
+  const firstUser = prompts[0].find((m) => m.role === 'user');
+  const secondUser = [...prompts[1]].reverse().find((m) => m.role === 'user');
+
+  const firstText = Array.isArray(firstUser.content)
+    ? firstUser.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : firstUser.content;
+  const secondText = Array.isArray(secondUser.content)
+    ? secondUser.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : secondUser.content;
+
+  assert.match(firstText, /Context \(JSON\):/i);
+  assert.doesNotMatch(secondText, /Context \(JSON\):/i);
+});
