@@ -15,7 +15,7 @@ It’s meant to feel like a smart helper, not a framework.
 ## ✅ What it does
 
 - Runs a simple, single-agent loop (bounded by `hops`)
-- Lets the model call your tools (`toys`)
+- Lets the LLM model (the brain) call your tool functions (the toys)
 - Keeps short-term conversation memory (in-process, per instance)
 - Supports optional structured output via Zod
 
@@ -30,13 +30,13 @@ It’s meant to feel like a smart helper, not a framework.
 
 ## ✨ Why Kimten?
 
-Use it when you just want an agent loop with tools and a little memory, without adopting a larger framework.
+Use it when you just want an agent loop with toys and a little memory, without adopting a larger framework.
 
 Good fits:
 
 - CLI helpers
 - small automations
-- local tools
+- local toys
 - scripting
 - quick AI utilities
 - “just let the model call a function” use cases
@@ -68,7 +68,15 @@ const cat = Kimten({
   brain: openai('gpt-4o-mini'), // or, any other available model
 
   toys: {
-    add: async ({ a, b }) => a + b,
+    randomNumber: {
+      description: 'Generate a random integer between min and max (inclusive).',
+      inputSchema: z.object({ min: z.number().int(), max: z.number().int() }),
+      async execute({ min, max }) {
+        const low = Math.min(min, max);
+        const high = Math.max(min, max);
+        return Math.floor(Math.random() * (high - low + 1)) + low;
+      },
+    },
   },
 
   personality: 'You are a helpful assistant.',
@@ -121,19 +129,18 @@ Create a new instance.
 
 #### Optional
 
-* `toys` → object map of tool definitions. Each entry can be:
-  * async function shorthand: `async (args) => result`
+* `toys` → object map of toy (tool) definitions. Each entry is:
   * object form: `{ inputSchema?, description?, strict?, execute }`
   default: `{}`
-* `personality` → system prompt / behavior description (default: `'You are a helpful assistant.'`)
-* `hops` → max agent loop steps (default: `10`)  
-  prevents infinite zoomies 🌀
+* `personality` → system instructions / prompt for overall behavior description (default: `'You are a helpful assistant.'`)
+* `hops` → max agent loop steps (default: `10`) - prevents infinite zoomies 🌀
 
-#### Tool semantics
+#### Toy semantics
 
-- Tool inputs are validated only if you provide `inputSchema` (shorthand tools accept anything).
-- Tool results should be JSON-serializable; `undefined` becomes `null`.
-- If a tool throws, Kimten returns `{ error, toolName }` as the tool result (it does not re-throw).
+- Toy inputs are validated only if you provide `inputSchema`.
+- Toy results should be JSON-serializable; `undefined` becomes `null`.
+- If a toy function throws, Kimten returns `{ error, toolName }` as the toy result (it does not re-throw).
+- Under the hood, each toy is implemented as an AI SDK tool.
 
 #### Returns
 
@@ -155,32 +162,25 @@ Create a new instance.
 
 For the `brain` part, feel free to use any compatible provider and their models.
 
-Refer to the AI SDK docs: **[providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models)**.
+❗ Note that not all providers (and models) may work out the box with Kimten, particularly for structured output.
 
-### Add tools freely
+💡 Refer to the AI SDK docs: **[providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models)**.
 
-Tools can stay simple, just normal async functions:
+### Add toys freely
 
-```js
-toys: {
-  readFile,
-  writeFile,
-  fetchJson,
-  runCommand,
-}
-```
-
-For stronger arg validation and better tool selection, use object form:
+Define `toys` in object form for strong arg validation and proper selection by the LLM:
 
 ```js
 import { z } from 'zod';
 
 toys: {
-  add: {
-    description: 'Add two numbers.',
-    inputSchema: z.object({ a: z.number(), b: z.number() }),
-    async execute({ a, b }) {
-      return a + b;
+  randomNumber: {
+    description: 'Generate a random integer between min and max (inclusive).',
+    inputSchema: z.object({ min: z.number().int(), max: z.number().int() }),
+    async execute({ min, max }) {
+      const low = Math.min(min, max);
+      const high = Math.max(min, max);
+      return Math.floor(Math.random() * (high - low + 1)) + low;
     },
   },
 }

@@ -21,8 +21,8 @@
  * Test coverage highlights:
  * - createMemory enforces MEMORY_LIMIT and supports clear() and list().
  * - normalizeToys:
- *   - wraps plain function tools into { execute() } form
  *   - accepts object-form tool definitions with description, inputSchema, strict flag
+ *   - rejects shorthand function tools
  *   - serializes thrown errors and circular/undefined results safely
  *   - rejects non-plain objects and invalid property types
  * - Kimten:
@@ -106,16 +106,6 @@ test('createMemory clear empties history', () => {
   assert.deepEqual(memory.list(), []);
 });
 
-test('normalizeToys validates and wraps tools', async () => {
-  const wrapped = normalizeToys({
-    add: async ({ a, b }) => a + b,
-  });
-
-  assert.equal(typeof wrapped.add.execute, 'function');
-  const out = await wrapped.add.execute({ a: 2, b: 3 });
-  assert.equal(out, 5);
-});
-
 test('normalizeToys supports object-form tool definitions', async () => {
   const wrapped = normalizeToys({
     add: {
@@ -132,10 +122,19 @@ test('normalizeToys supports object-form tool definitions', async () => {
   assert.equal(out, 5);
 });
 
+test('normalizeToys rejects shorthand function tools', () => {
+  assert.throws(
+    () => normalizeToys({ add: async ({ a, b }) => a + b }),
+    /must be an object with execute/i
+  );
+});
+
 test('normalizeToys serializes tool errors safely', async () => {
   const wrapped = normalizeToys({
-    boom: async () => {
-      throw new Error('failed');
+    boom: {
+      async execute() {
+        throw new Error('failed');
+      },
     },
   });
 
@@ -144,8 +143,8 @@ test('normalizeToys serializes tool errors safely', async () => {
   assert.equal(out.toolName, 'boom');
 });
 
-test('normalizeToys rejects non-function tool entries', () => {
-  assert.throws(() => normalizeToys({ bad: 1 }), /must be a function or an object/i);
+test('normalizeToys rejects non-object tool entries', () => {
+  assert.throws(() => normalizeToys({ bad: 1 }), /must be an object with execute/i);
 });
 
 test('normalizeToys rejects object-form entries without execute', () => {
@@ -185,7 +184,11 @@ test('normalizeToys validates tool description and strict types', () => {
 
 test('normalizeToys serializes undefined results as null', async () => {
   const wrapped = normalizeToys({
-    noop: async () => undefined,
+    noop: {
+      async execute() {
+        return undefined;
+      },
+    },
   });
 
   const out = await wrapped.noop.execute({});
@@ -194,10 +197,12 @@ test('normalizeToys serializes undefined results as null', async () => {
 
 test('normalizeToys serializes circular tool results safely', async () => {
   const wrapped = normalizeToys({
-    circular: async () => {
-      const obj = {};
-      obj.self = obj;
-      return obj;
+    circular: {
+      async execute() {
+        const obj = {};
+        obj.self = obj;
+        return obj;
+      },
     },
   });
 
