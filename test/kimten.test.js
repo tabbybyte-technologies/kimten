@@ -3,7 +3,6 @@
  * @description
  * Unit tests for the Kimten library, covering:
  * - Memory behavior and FIFO eviction via createMemory()
- * - Prompt/message building via buildMessages()
  * - Tool normalization and validation via normalizeToys()
  * - Kimten factory validation, behavior, and caching (play/forget)
  *
@@ -21,7 +20,6 @@
  *
  * Test coverage highlights:
  * - createMemory enforces MEMORY_LIMIT and supports clear() and list().
- * - buildMessages prepends a system prompt to user messages.
  * - normalizeToys:
  *   - wraps plain function tools into { execute() } form
  *   - accepts object-form tool definitions with description, inputSchema, strict flag
@@ -41,7 +39,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { createMemory, MEMORY_LIMIT } from '../lib/memory.js';
-import { buildMessages } from '../lib/prompt.js';
 import { normalizeToys } from '../lib/tools.js';
 import Kimten, { Kimten as NamedKimten } from '../index.js';
 
@@ -107,12 +104,6 @@ test('createMemory clear empties history', () => {
   memory.add({ role: 'user', content: 'hello' });
   memory.clear();
   assert.deepEqual(memory.list(), []);
-});
-
-test('buildMessages prepends system prompt', () => {
-  const messages = buildMessages('be helpful', [{ role: 'user', content: 'x' }]);
-  assert.deepEqual(messages[0], { role: 'system', content: 'be helpful' });
-  assert.equal(messages.length, 2);
 });
 
 test('normalizeToys validates and wraps tools', async () => {
@@ -310,6 +301,6 @@ test('Kimten forget clears conversation memory', async () => {
 
   assert.ok(roles2.includes('assistant'));
   assert.ok(!roles3.includes('assistant'));
-  assert.deepEqual(roles1, ['system', 'system', 'user']);
-  assert.deepEqual(roles3, ['system', 'system', 'user']);
+  assert.deepEqual(roles1, ['system', 'user']);
+  assert.deepEqual(roles3, ['system', 'user']);
 });
