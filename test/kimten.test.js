@@ -272,69 +272,7 @@ test('Kimten play(input) returns structured output via configured box schema', a
   assert.deepEqual(out, { name: 'kim' });
 });
 
-test('Kimten injects one-line JSON schema instruction into play prompt when box is configured', async () => {
-  const prompts = [];
-  const cat = Kimten({
-    brain: createSpyModel({ text: '{"name":"kim"}', prompts }),
-    toys: {},
-    personality: 'helper',
-    box: z.object({ name: z.string() }),
-  });
-
-  await cat.play('extract name');
-
-  const systemMessage = prompts[0].find((m) => m.role === 'system');
-  assert.ok(systemMessage);
-  const systemText = Array.isArray(systemMessage.content)
-    ? systemMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
-    : systemMessage.content;
-  assert.equal(systemText, 'helper');
-
-  const userMessage = prompts[0].find((m) => m.role === 'user');
-  assert.ok(userMessage);
-  const userText = Array.isArray(userMessage.content)
-    ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
-    : userMessage.content;
-  assert.match(userText, /runtime instructions:/i);
-  assert.match(userText, /return only valid json that exactly matches the configured output schema/i);
-});
-
-test('Kimten injects one-line tool instruction into play prompt when toys are configured', async () => {
-  const prompts = [];
-  const personality = 'helper-core-personality';
-  const cat = Kimten({
-    brain: createSpyModel({ text: 'ok', prompts }),
-    personality,
-    toys: {
-      add: {
-        description: 'Add two numbers.',
-        inputSchema: z.object({ a: z.number(), b: z.number() }),
-        async execute({ a, b }) {
-          return a + b;
-        },
-      },
-    },
-  });
-
-  await cat.play('what is 2+3?');
-
-  const systemMessage = prompts[0].find((m) => m.role === 'system');
-  assert.ok(systemMessage);
-  const systemText = Array.isArray(systemMessage.content)
-    ? systemMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
-    : systemMessage.content;
-  assert.equal(systemText, personality);
-
-  const userMessage = prompts[0].find((m) => m.role === 'user');
-  assert.ok(userMessage);
-  const userText = Array.isArray(userMessage.content)
-    ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
-    : userMessage.content;
-  assert.match(userText, /runtime instructions:/i);
-  assert.match(userText, /use provided tools when needed; never invent tool outputs/i);
-});
-
-test('Kimten injects both one-line instructions when box and toys are configured', async () => {
+test('Kimten does not inject hidden runtime instruction text into user prompt', async () => {
   const prompts = [];
   const cat = Kimten({
     brain: createSpyModel({ text: '{"name":"kim"}', prompts }),
@@ -358,8 +296,7 @@ test('Kimten injects both one-line instructions when box and toys are configured
   const userText = Array.isArray(userMessage.content)
     ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
     : userMessage.content;
-  assert.match(userText, /use provided tools when needed; never invent tool outputs/i);
-  assert.match(userText, /return only valid json that exactly matches the configured output schema/i);
+  assert.equal(userText, 'extract name');
 });
 
 test('Kimten forget clears conversation memory', async () => {
