@@ -30,7 +30,7 @@ It’s meant to feel like a smart helper, not a framework.
 
 ## ✨ Why Kimten?
 
-Use it when you just want an agent loop with toys and a little memory, without adopting a larger framework.
+Use it when you just want a disposable agent loop with toys and a little memory, without adopting a larger framework.
 
 Good fits:
 
@@ -118,6 +118,8 @@ return result
 Each instance keeps short-term chat memory, so follow-up prompts naturally reference earlier messages:
 
 > “summarize this” → “make it shorter” → “now extract bullets”
+
+💡 Kimten agents, being tiny, are meant to be single-purpose & disposable by design. Dynamic reusability at runtime is restricted to the input prompt and the ephemeral context object.
 
 ---
 
