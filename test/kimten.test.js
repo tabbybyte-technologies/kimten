@@ -299,6 +299,44 @@ test('Kimten injects box schema field/type hints into user prompt', async () => 
   assert.match(userText, /return only a valid json object that exactly matches this schema/i);
   assert.match(userText, /"name": string/);
   assert.match(userText, /extract name/);
+  assert.doesNotMatch(userText, /tool policy:/i);
+});
+
+test('Kimten appends tools guidance to system instructions when toys are non-empty', async () => {
+  const prompts = [];
+  const personality = 'helper';
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    personality,
+    toys: {
+      add: {
+        description: 'Add two numbers.',
+        inputSchema: z.object({ a: z.number(), b: z.number() }),
+        async execute({ a, b }) {
+          return a + b;
+        },
+      },
+    },
+  });
+
+  await cat.play('what is 1+2?');
+
+  const systemMessage = prompts[0].find((m) => m.role === 'system');
+  assert.ok(systemMessage);
+  const systemText = Array.isArray(systemMessage.content)
+    ? systemMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : systemMessage.content;
+  assert.match(systemText, /^helper/);
+  assert.match(systemText, /tool policy:/i);
+  assert.match(systemText, /add/);
+  assert.match(systemText, /do not fabricate tool results/i);
+
+  const userMessage = prompts[0].find((m) => m.role === 'user');
+  assert.ok(userMessage);
+  const userText = Array.isArray(userMessage.content)
+    ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : userMessage.content;
+  assert.equal(userText, 'what is 1+2?');
 });
 
 test('Kimten forget clears conversation memory', async () => {
