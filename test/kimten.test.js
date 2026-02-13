@@ -272,7 +272,7 @@ test('Kimten play(input) returns structured output via configured box schema', a
   assert.deepEqual(out, { name: 'kim' });
 });
 
-test('Kimten does not inject hidden runtime instruction text into user prompt', async () => {
+test('Kimten injects box schema field/type hints into user prompt', async () => {
   const prompts = [];
   const cat = Kimten({
     brain: createSpyModel({ text: '{"name":"kim"}', prompts }),
@@ -296,7 +296,9 @@ test('Kimten does not inject hidden runtime instruction text into user prompt', 
   const userText = Array.isArray(userMessage.content)
     ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
     : userMessage.content;
-  assert.equal(userText, 'extract name');
+  assert.match(userText, /return only a valid json object that exactly matches this schema/i);
+  assert.match(userText, /"name": string/);
+  assert.match(userText, /extract name/);
 });
 
 test('Kimten forget clears conversation memory', async () => {
