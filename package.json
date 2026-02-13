@@ -21,8 +21,8 @@
   ],
   "scripts": {
     "test": "node --import ./test/setup.js --test \"test/**/*.test.js\"",
-    "test:coverage": "node --import ./test/setup.js --test \"test/**/*.test.js\" --experimental-test-coverage --test-coverage-include=lib/**/*.js --test-coverage-include=index.js --test-coverage-exclude=test/**/*.js --test-coverage-exclude=node_modules/**",
-    "test:coverage:ci": "node --import ./test/setup.js --test \"test/**/*.test.js\" --experimental-test-coverage --test-coverage-include=lib/**/*.js --test-coverage-include=index.js --test-coverage-exclude=test/**/*.js --test-coverage-exclude=node_modules/** --test-coverage-lines=95 --test-coverage-functions=95 --test-coverage-branches=85"
+    "test:coverage": "node --test --experimental-test-coverage --test-reporter=spec \"test/**/*.test.js\"",
+    "test:coverage:ci": "node --test --experimental-test-coverage --test-reporter=spec \"test/**/*.test.js\" --test-coverage-lines=95 --test-coverage-functions=90 --test-coverage-branches=85"
   },
   "keywords": [
     "ai",

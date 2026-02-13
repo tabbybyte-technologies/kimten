@@ -12,6 +12,7 @@ import {
   buildMessagesForAgent,
   buildSystemInstructions,
   buildToolsSystemSuffix,
+  serializeContext,
 } from '../lib/prompt.js';
 
 test('buildToolsSystemSuffix returns empty string for empty tools', () => {
@@ -107,4 +108,65 @@ test('buildBoxSchemaHint supports v4-like schema internals', () => {
   const hint = buildBoxSchemaHint(v4Object);
   assert.ok(hint.includes(BOX_SCHEMA_HINT_PREFIX));
   assert.ok(hint.indexOf('"alpha": string[]') < hint.indexOf('"zeta": string | number'));
+});
+
+test('serializeContext redacts secrets and handles toJSON undefined fallback', () => {
+  const out = serializeContext({
+    password: 'pw',
+    token: 'abc',
+    nested: { apiKey: 'k', api_key: 'k2', secretThing: 'x' },
+  });
+  assert.match(out, /\[REDACTED\]/);
+
+  const blank = serializeContext({
+    toJSON() {
+      return undefined;
+    },
+  });
+  assert.equal(blank, '');
+});
+
+test('buildBoxSchemaHint handles literal, enum fallback, and union fallback branches', () => {
+  const fakeLiteral = { _def: { typeName: 'ZodLiteral', value: 'ok' } };
+  const fakeEnumValuesFromEntries = { _zod: { def: { type: 'enum', entries: { A: 'A', B: 'B' } } } };
+  const fakeEnumFallback = { _zod: { def: { type: 'enum', values: { bad: true } } } };
+  const fakeUnionFallback = { _zod: { def: { type: 'union', options: { bad: true } } } };
+  const fakeV4Transform = { _zod: { def: { type: 'transform', schema: fakeLiteral } } };
+
+  const hint = buildBoxSchemaHint({
+    _zod: {
+      def: {
+        type: 'object',
+        shape: {
+          a: fakeLiteral,
+          b: fakeEnumValuesFromEntries,
+          c: fakeEnumFallback,
+          d: fakeUnionFallback,
+          e: fakeV4Transform,
+        },
+      },
+    },
+  });
+
+  assert.match(hint, /"a": "ok"/);
+  assert.match(hint, /"b": "A" \| "B"/);
+  assert.match(hint, /"c": enum/);
+  assert.match(hint, /"d": unknown/);
+  assert.match(hint, /"e": "ok"/);
+});
+
+test('buildBoxSchemaHint unwraps ZodEffects nodes', () => {
+  const effectsLike = {
+    _def: {
+      typeName: 'ZodEffects',
+      schema: {
+        _def: {
+          typeName: 'ZodString',
+        },
+      },
+    },
+  };
+
+  const hint = buildBoxSchemaHint(effectsLike);
+  assert.match(hint, /string/);
 });
