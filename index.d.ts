@@ -13,24 +13,22 @@ export type ToyDefinition = {
 
 export type Toys = Record<string, ToyDefinition>;
 
-export type KimtenConfig = {
+export type KimtenConfig<S extends ZodTypeAny | undefined = undefined> = {
   brain: BrainModel;
   toys?: Toys;
   personality?: string;
   hops?: number;
+  box?: S;
 };
 
-export type KimtenAgent = {
-  play(input: string, schema?: null, context?: Record<string, unknown> | null): Promise<string>;
-  play<S extends ZodTypeAny>(
-    input: string,
-    schema: S,
-    context?: Record<string, unknown> | null
-  ): Promise<ZodInfer<S>>;
+export type KimtenAgent<Out = string> = {
+  play(input: string, context?: Record<string, unknown> | null): Promise<Out>;
   forget(): void;
 };
 
-export declare function Kimten(config: KimtenConfig): KimtenAgent;
+export declare function Kimten<S extends ZodTypeAny | undefined = undefined>(
+  config: KimtenConfig<S>
+): KimtenAgent<S extends ZodTypeAny ? ZodInfer<S> : string>;
 
 declare const _default: typeof Kimten;
 export default _default;

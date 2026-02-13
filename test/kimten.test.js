@@ -30,7 +30,7 @@
  *   - exposes only play() and forget() methods
  *   - enforces play() input type (string)
  *   - supports optional personality and toys
- *   - returns structured output when given a Zod schema and caches structured agents
+ *   - returns structured output when configured with a Zod box schema
  *   - forget() clears conversation memory so subsequent prompts omit assistant history
  * 
  * Note: These tests are not exhaustive but cover key behaviors and edge cases of the Kimten library.
@@ -216,6 +216,7 @@ test('Kimten validates constructor config', () => {
   assert.throws(() => Kimten({ brain: 1 }), /brain/i);
   assert.throws(() => Kimten({ brain: {}, toys: {}, personality: '' }), /personality/i);
   assert.throws(() => Kimten({ brain: {}, toys: {}, personality: 'x', hops: 0 }), /hops/i);
+  assert.throws(() => Kimten({ brain: {}, toys: {}, box: 'bad' }), /box/i);
 });
 
 test('Kimten returns only play and forget methods', () => {
@@ -259,30 +260,68 @@ test('Kimten toys are optional', async () => {
   assert.equal(out, 'ok');
 });
 
-test('Kimten play(input, schema) returns structured output via AI SDK output', async () => {
+test('Kimten play(input) returns structured output via configured box schema', async () => {
   const cat = Kimten({
     brain: createFakeModel({ text: '{"name":"kim"}' }),
     toys: {},
     personality: 'helper',
+    box: z.object({ name: z.string() }),
   });
 
-  const out = await cat.play('extract name', z.object({ name: z.string() }));
+  const out = await cat.play('extract name');
   assert.deepEqual(out, { name: 'kim' });
 });
 
-test('Kimten caches structured agents for the same schema instance', async () => {
+test('Kimten appends JSON-only schema instruction when box is configured', async () => {
+  const prompts = [];
   const cat = Kimten({
-    brain: createFakeModel({ text: '{"name":"kim"}' }),
+    brain: createSpyModel({ text: '{"name":"kim"}', prompts }),
     toys: {},
     personality: 'helper',
+    box: z.object({ name: z.string() }),
   });
 
-  const schema = z.object({ name: z.string() });
-  const out1 = await cat.play('extract name', schema);
-  const out2 = await cat.play('extract name again', schema);
+  await cat.play('extract name');
 
-  assert.deepEqual(out1, { name: 'kim' });
-  assert.deepEqual(out2, { name: 'kim' });
+  const systemMessage = prompts[0].find((m) => m.role === 'system');
+  assert.ok(systemMessage);
+  const systemText = Array.isArray(systemMessage.content)
+    ? systemMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : systemMessage.content;
+  assert.match(systemText, /output contract:/i);
+  assert.match(systemText, /return only valid json/i);
+  assert.match(systemText, /configured output schema/i);
+});
+
+test('Kimten appends tool-use instruction when toys are configured', async () => {
+  const prompts = [];
+  const personality = 'helper-core-personality';
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    personality,
+    toys: {
+      add: {
+        description: 'Add two numbers.',
+        inputSchema: z.object({ a: z.number(), b: z.number() }),
+        async execute({ a, b }) {
+          return a + b;
+        },
+      },
+    },
+  });
+
+  await cat.play('what is 2+3?');
+
+  const systemMessage = prompts[0].find((m) => m.role === 'system');
+  assert.ok(systemMessage);
+  const systemText = Array.isArray(systemMessage.content)
+    ? systemMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : systemMessage.content;
+
+  assert.ok(systemText.startsWith(personality));
+  assert.match(systemText, /tool-use policy:/i);
+  assert.match(systemText, /use provided tools/i);
+  assert.match(systemText, /do not invent tool outputs/i);
 });
 
 test('Kimten forget clears conversation memory', async () => {
@@ -317,8 +356,21 @@ test('Kimten play accepts optional context object', async () => {
     personality: 'helper',
   });
 
-  const out = await cat.play('hi', null, { requestId: 'req-1' });
+  const out = await cat.play('hi', { requestId: 'req-1' });
   assert.equal(out, 'ok');
+});
+
+test('Kimten play does not allow runtime schema override', async () => {
+  const cat = Kimten({
+    brain: createFakeModel({ text: 'ok' }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await assert.rejects(
+    () => cat.play('hi', z.object({ name: z.string() })),
+    /expects context to be a plain object/i
+  );
 });
 
 test('Kimten injects context into the user prompt content', async () => {
@@ -329,7 +381,7 @@ test('Kimten injects context into the user prompt content', async () => {
     personality: 'helper',
   });
 
-  await cat.play('hello', null, {
+  await cat.play('hello', {
     requestId: 'req-1',
     token: 'super-secret-token',
   });
@@ -353,7 +405,7 @@ test('Kimten context is ephemeral and not persisted across plays', async () => {
     personality: 'helper',
   });
 
-  await cat.play('first', null, { requestId: 'req-1' });
+  await cat.play('first', { requestId: 'req-1' });
   await cat.play('second');
 
   const firstUser = prompts[0].find((m) => m.role === 'user');

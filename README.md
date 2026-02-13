@@ -87,11 +87,14 @@ const cat = Kimten({
 // free-form text
 const text = await cat.play('summarize this repo');
 
-// structured output
-const structured = await cat.play(
-  'extract the name',
-  z.object({ name: z.string() })
-);
+const jsonCat = Kimten({
+  brain: openai('gpt-4o-mini'),
+  personality: 'You are a helpful assistant.',
+  box: z.object({ name: z.string() }), // fixed per instance
+});
+
+// structured output (from configured box)
+const structured = await jsonCat.play('extract the name');
 
 // wipe short-term memory
 cat.forget();
@@ -134,6 +137,7 @@ Create a new instance.
   default: `{}`
 * 🕵️‍♂️ `personality` → system instructions / prompt for overall behavior description (default: `'You are a helpful assistant.'`)
 * 🌀 `hops` → max agent loop steps (default: `10`) - prevents infinite zoomies
+* 📦 `box` → optional Zod schema that fixes the output format for this instance
 
 #### Toy semantics
 
@@ -144,11 +148,12 @@ Create a new instance.
 
 #### Returns
 
-* `play(input, schema?, context?)`
+* `play(input, context?)`
 
   * runs the agent  
   * uses short-term memory automatically  
-  * optional Zod schema for structured output
+  * returns plain text by default
+  * returns structured output only when `box` is configured during `Kimten(...)`
   * optional plain object context injected into the current call prompt as JSON (with basic redaction/truncation guards)
   * context is ephemeral per `play()` call and is not persisted in memory
 
