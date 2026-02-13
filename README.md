@@ -119,7 +119,7 @@ Each instance keeps short-term chat memory, so follow-up prompts naturally refer
 
 > “summarize this” → “make it shorter” → “now extract bullets”
 
-💡 Kimten agents, being tiny, are meant to be single-purpose & disposable by design. Dynamic reusability at runtime is restricted to the input prompt and the ephemeral context object.
+💡 Kimten agents are tiny, single-purpose, and disposable by design. Don’t expect to rewire them at runtime; steer them by changing the input prompt or the ephemeral context object instead.
 
 ---
 
