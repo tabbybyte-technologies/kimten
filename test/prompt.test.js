@@ -85,3 +85,26 @@ test('buildBoxSchemaHint falls back to unknown for unsupported schema node', () 
   assert.ok(hint.includes(BOX_SCHEMA_HINT_PREFIX));
   assert.match(hint, /unknown/);
 });
+
+test('buildBoxSchemaHint supports v4-like schema internals', () => {
+  const v4String = { _zod: { def: { type: 'string' } } };
+  const v4Number = { _zod: { def: { type: 'number' } } };
+  const v4OptionalString = { _zod: { def: { type: 'optional', innerType: v4String } } };
+  const v4ArrayOptionalString = { _zod: { def: { type: 'array', element: v4OptionalString } } };
+  const v4Union = { _zod: { def: { type: 'union', options: [v4String, v4Number] } } };
+  const v4Object = {
+    _zod: {
+      def: {
+        type: 'object',
+        shape: {
+          zeta: v4Union,
+          alpha: v4ArrayOptionalString,
+        },
+      },
+    },
+  };
+
+  const hint = buildBoxSchemaHint(v4Object);
+  assert.ok(hint.includes(BOX_SCHEMA_HINT_PREFIX));
+  assert.ok(hint.indexOf('"alpha": string[]') < hint.indexOf('"zeta": string | number'));
+});
