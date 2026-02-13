@@ -147,6 +147,7 @@ Create a new instance.
 - Toy results should be JSON-serializable; `undefined` becomes `null`.
 - If a toy function throws, Kimten returns `{ error, toolName }` as the toy result (it does not re-throw).
 - Under the hood, each toy is implemented as an AI SDK tool.
+- When toys are present, Kimten appends a short tool-usage policy to system instructions.
 
 #### Returns
 
@@ -156,6 +157,7 @@ Create a new instance.
   * uses short-term memory automatically  
   * returns plain text by default
   * returns structured output only when `box` is configured during `Kimten(...)`
+  * when `box` is set, Kimten injects a concise schema hint into each call prompt to improve field-level adherence
   * optional plain object context injected into the current call prompt as JSON (with basic redaction/truncation guards)
   * context is ephemeral per `play()` call and is not persisted in memory
 

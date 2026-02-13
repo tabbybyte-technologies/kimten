@@ -296,7 +296,8 @@ test('Kimten injects box schema field/type hints into user prompt', async () => 
   const userText = Array.isArray(userMessage.content)
     ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
     : userMessage.content;
-  assert.match(userText, /return only a valid json object that exactly matches this schema/i);
+  assert.match(userText, /return only a valid json object/i);
+  assert.match(userText, /exactly matches this schema/i);
   assert.match(userText, /"name": string/);
   assert.match(userText, /extract name/);
   assert.doesNotMatch(userText, /tool policy:/i);
@@ -435,4 +436,51 @@ test('Kimten context is ephemeral and not persisted across plays', async () => {
 
   assert.match(firstText, /Context \(JSON\):/i);
   assert.doesNotMatch(secondText, /Context \(JSON\):/i);
+});
+
+test('Kimten does not persist box schema hint in prior user memory entries', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: '{"name":"kim"}', prompts }),
+    toys: {},
+    personality: 'helper',
+    box: z.object({ name: z.string() }),
+  });
+
+  await cat.play('first');
+  await cat.play('second');
+
+  const usersInSecondPrompt = prompts[1].filter((m) => m.role === 'user');
+  assert.ok(usersInSecondPrompt.length >= 2);
+
+  const firstUserText = Array.isArray(usersInSecondPrompt[0].content)
+    ? usersInSecondPrompt[0].content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : usersInSecondPrompt[0].content;
+  const secondUserText = Array.isArray(usersInSecondPrompt[usersInSecondPrompt.length - 1].content)
+    ? usersInSecondPrompt[usersInSecondPrompt.length - 1].content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : usersInSecondPrompt[usersInSecondPrompt.length - 1].content;
+
+  assert.equal(firstUserText, 'first');
+  assert.match(secondUserText, /return only a valid json object/i);
+  assert.match(secondUserText, /second/);
+});
+
+test('Kimten truncates oversized context in injected prompt', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('hello', { blob: 'x'.repeat(8000) });
+
+  const userMessage = prompts[0].find((m) => m.role === 'user');
+  assert.ok(userMessage);
+  const userText = Array.isArray(userMessage.content)
+    ? userMessage.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : userMessage.content;
+
+  assert.match(userText, /Context \(JSON\):/i);
+  assert.match(userText, /\.\.\.\(truncated\)/);
 });
