@@ -53,7 +53,7 @@ npm i @tabbybyte/kimten ai zod @ai-sdk/openai
 
 - Node `>=22`
 - AI SDK Core `>=6`
-- Zod `>=3`
+- Zod `>=3` (v4+ preferred)
 
 ---
 
@@ -85,16 +85,21 @@ const cat = Kimten({
 });
 
 // free-form text
-const text = await cat.play('summarize this repo');
+const text = await cat.play('summarize this repo', {
+  requestId: 'req-123', // ephemeral context
+  repo: 'tabbybyte/kimten', // ephemeral context
+});
 
 const jsonCat = Kimten({
   brain: openai('gpt-4o-mini'),
   personality: 'You are a helpful assistant.',
-  box: z.object({ name: z.string() }), // fixed per instance
+  box: z.object({ name: z.string() }), // fixed per Kimten instance
 });
 
 // structured output (from configured box)
-const structured = await jsonCat.play('extract the name');
+const structured = await jsonCat.play('extract the name', {
+  source: 'profile bio', // ephemeral context
+});
 
 // wipe short-term memory
 cat.forget();
@@ -143,11 +148,11 @@ Create a new instance.
 
 #### Toy semantics
 
-- Toy inputs are validated only if you provide `inputSchema`.
-- Toy results should be JSON-serializable; `undefined` becomes `null`.
-- If a toy function throws, Kimten returns `{ error, toolName }` as the toy result (it does not re-throw).
-- Under the hood, each toy is implemented as an AI SDK tool.
-- When toys are present, Kimten appends a short tool-usage policy to system instructions.
+- Toy inputs are validated only if you provide `inputSchema`
+- Toy results should be JSON-serializable; `undefined` becomes `null`
+- If a toy function throws, Kimten returns `{ error, toolName }` as the toy result (it does not re-throw)
+- Under the hood, each toy is implemented as an AI SDK tool
+- When toys are present, Kimten appends a short tool-usage policy to system instructions
 
 #### Returns
 
@@ -173,7 +178,7 @@ Create a new instance.
 
 For the `brain` part, feel free to use any compatible provider and their models.
 
-❗ Note that not all providers (and models) may work out the box with Kimten, particularly for structured output.
+⚠️ Note that not all providers (and models) may work out of the box with Kimten, particularly for structured output.
 
 💡 Refer to the AI SDK docs for details: **[providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models)**.
 
