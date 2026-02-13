@@ -15,9 +15,9 @@ It’s meant to feel like a smart helper, not a framework.
 ## ✅ What it does
 
 - Runs a simple, single-agent loop (bounded by `hops`)
-- Lets the LLM model (the brain) call your tool functions (the toys)
+- Lets the LLM model (the `brain`) call your tool functions (the `toys`)
+- Supports optional structured output via Zod (controlled by the `box`)
 - Keeps short-term conversation memory (in-process, per instance)
-- Supports optional structured output via Zod
 
 ## ❌ What it does *not* do
 
