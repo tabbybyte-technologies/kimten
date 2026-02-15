@@ -15,7 +15,8 @@
  * @function createSpyModel
  * @param {Object} opts
  * @param {string} opts.text - Text to return as the model generation result.
- * @param {Array} opts.prompts - Array to which invoked prompts will be pushed.
+ * @param {Array} [opts.prompts] - Array to which invoked prompts will be pushed.
+ * @param {Array} [opts.calls] - Array to which raw doGenerate options will be pushed.
  * @returns {Object} Fake model that records prompts passed to doGenerate().
  *
  * Test coverage highlights:
@@ -37,6 +38,9 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { createMemory, MEMORY_LIMIT } from '../lib/memory.js';
 import { normalizeToys } from '../lib/tools.js';
@@ -62,14 +66,19 @@ function createFakeModel({ text }) {
   };
 }
 
-function createSpyModel({ text, prompts }) {
+function createSpyModel({ text, prompts, calls }) {
   return {
     specificationVersion: 'v2',
     provider: 'test',
     modelId: 'fake',
     supportedUrls: {},
     async doGenerate(options) {
-      prompts.push(options.prompt);
+      if (Array.isArray(prompts)) {
+        prompts.push(options.prompt);
+      }
+      if (Array.isArray(calls)) {
+        calls.push(options);
+      }
       return {
         finishReason: 'stop',
         usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
@@ -387,6 +396,323 @@ test('Kimten play does not allow runtime schema override', async () => {
     () => cat.play('hi', z.object({ name: z.string() })),
     /expects context to be a plain object/i
   );
+});
+
+test('Kimten play accepts attachments via options and sends multipart user content', async () => {
+  const prompts = [];
+  const imageDataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+  const fileBytes = new Uint8Array([104, 101, 108, 108, 111]);
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('describe this', null, {
+    attachments: [
+      { kind: 'image', image: imageDataUrl, mediaType: 'image/png' },
+      { kind: 'file', data: fileBytes, mediaType: 'text/plain', filename: 'doc.txt' },
+    ],
+  });
+
+  const userMessage = prompts[0].find((m) => m.role === 'user');
+  assert.ok(userMessage);
+  assert.ok(Array.isArray(userMessage.content));
+  assert.equal(userMessage.content[0].type, 'text');
+  assert.equal(userMessage.content[0].text, 'describe this');
+  assert.equal(userMessage.content[1].mediaType, 'image/png');
+  assert.equal(userMessage.content[2].type, 'file');
+  assert.deepEqual(userMessage.content[2].data, fileBytes);
+  assert.equal(userMessage.content[2].mediaType, 'text/plain');
+  assert.equal(userMessage.content[2].filename, 'doc.txt');
+});
+
+test('Kimten attachments are ephemeral and not persisted across plays', async () => {
+  const prompts = [];
+  const imageBytes = new Uint8Array([137, 80, 78, 71]);
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('first', null, {
+    attachments: [{ kind: 'image', image: imageBytes, mediaType: 'image/png' }],
+  });
+  await cat.play('second');
+
+  const firstUser = prompts[0].find((m) => m.role === 'user');
+  const secondPromptUsers = prompts[1].filter((m) => m.role === 'user');
+  const secondLastUser = secondPromptUsers[secondPromptUsers.length - 1];
+
+  assert.ok(Array.isArray(firstUser.content));
+  assert.equal(secondPromptUsers.length, 2);
+  const priorUserText = Array.isArray(secondPromptUsers[0].content)
+    ? secondPromptUsers[0].content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : secondPromptUsers[0].content;
+  const secondUserText = Array.isArray(secondLastUser.content)
+    ? secondLastUser.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : secondLastUser.content;
+  assert.equal(priorUserText, 'first');
+  assert.equal(secondUserText, 'second');
+});
+
+test('Kimten play forwards supported generation options', async () => {
+  const calls = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', calls }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('hi', null, {
+    temperature: 0.3,
+    topP: 0.9,
+    topK: 40,
+    maxOutputTokens: 128,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].temperature, 0.3);
+  assert.equal(calls[0].topP, 0.9);
+  assert.equal(calls[0].topK, 40);
+  assert.equal(calls[0].maxOutputTokens, 128);
+});
+
+test('Kimten play rejects unknown options and invalid option values', async () => {
+  const cat = Kimten({
+    brain: createFakeModel({ text: 'ok' }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await assert.rejects(
+    () => cat.play('hi', null, { foo: 'bar' }),
+    /does not support option "foo"/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { temperature: 'hot' }),
+    /"temperature" must be a number/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { temperature: Number.NaN }),
+    /"temperature" must be a number/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { maxOutputTokens: 0 }),
+    /"maxOutputTokens" must be an integer >= 1/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { maxOutputTokens: 1.5 }),
+    /"maxOutputTokens" must be an integer >= 1/i
+  );
+});
+
+test('Kimten play rejects invalid attachments', async () => {
+  const cat = Kimten({
+    brain: createFakeModel({ text: 'ok' }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: { bad: true } }),
+    /"attachments" must be an array/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'image' }] }),
+    /image attachment.*must include "image"/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'file', data: 'abc' }] }),
+    /file attachment.*must include a non-empty "mediaType"/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [null] }),
+    /attachment at index 0 must be a plain object/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'image', image: 'abc', mediaType: 123 }] }),
+    /image attachment.*invalid "mediaType"/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'file', data: 123, mediaType: 'text/plain' }] }),
+    /file attachment.*must include "data"/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'file', data: 'abc', mediaType: 'text/plain', filename: 123 }] }),
+    /file attachment.*invalid "filename"/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'audio', data: 'abc' }] }),
+    /invalid "kind".*Expected "image" or "file"/i
+  );
+});
+
+test('Kimten play rejects non-object options', async () => {
+  const cat = Kimten({
+    brain: createFakeModel({ text: 'ok' }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await assert.rejects(
+    () => cat.play('hi', null, []),
+    /expects options to be a plain object/i
+  );
+});
+
+test('Kimten play accepts URL and Buffer attachment sources', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('inspect', null, {
+    attachments: [
+      { kind: 'image', image: new URL('data:image/png;base64,iVBORw0KGgo=') },
+      { kind: 'file', data: Buffer.from('hello'), mediaType: 'text/plain', filename: 'hello.txt' },
+    ],
+  });
+
+  const userMessage = prompts[0].find((m) => m.role === 'user');
+  assert.ok(Array.isArray(userMessage.content));
+  assert.equal(userMessage.content[0].type, 'text');
+  assert.equal(userMessage.content[1].mediaType, 'image/png');
+  assert.equal(userMessage.content[2].type, 'file');
+  assert.equal(userMessage.content[2].mediaType, 'text/plain');
+});
+
+test('Kimten play accepts null options as omitted options', async () => {
+  const cat = Kimten({
+    brain: createFakeModel({ text: 'ok' }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  const out = await cat.play('hi', null, null);
+  assert.equal(out, 'ok');
+});
+
+test('Kimten play accepts file attachment without filename', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  await cat.play('read file', null, {
+    attachments: [{ kind: 'file', data: 'aGVsbG8=', mediaType: 'text/plain' }],
+  });
+
+  const userMessage = prompts[0].find((m) => m.role === 'user');
+  assert.ok(Array.isArray(userMessage.content));
+  assert.equal(userMessage.content[1].type, 'file');
+  assert.equal(userMessage.content[1].mediaType, 'text/plain');
+  assert.equal(userMessage.content[1].filename, undefined);
+});
+
+test('Kimten play resolves local file path strings to file bytes', async () => {
+  const prompts = [];
+  const tempDir = await mkdtemp(join(tmpdir(), 'kimten-'));
+  const filePath = join(tempDir, 'cv.pdf');
+  await writeFile(filePath, Buffer.from('mock-pdf-content'));
+
+  try {
+    const cat = Kimten({
+      brain: createSpyModel({ text: 'ok', prompts }),
+      toys: {},
+      personality: 'helper',
+    });
+
+    await cat.play('summarize attachment', null, {
+      attachments: [{ kind: 'file', data: filePath, mediaType: 'application/pdf' }],
+    });
+
+    const userMessage = prompts[0].find((m) => m.role === 'user');
+    assert.ok(Array.isArray(userMessage.content));
+    const filePart = userMessage.content.find((part) => part.type === 'file');
+    assert.ok(filePart);
+    assert.notEqual(filePart.data, filePath);
+    assert.equal(filePart.mediaType, 'application/pdf');
+    assert.equal(filePart.filename, 'cv.pdf');
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Kimten play resolves local image path strings to bytes', async () => {
+  const prompts = [];
+  const tempDir = await mkdtemp(join(tmpdir(), 'kimten-'));
+  const filePath = join(tempDir, 'img.png');
+  await writeFile(filePath, Buffer.from([137, 80, 78, 71]));
+
+  try {
+    const cat = Kimten({
+      brain: createSpyModel({ text: 'ok', prompts }),
+      toys: {},
+      personality: 'helper',
+    });
+
+    await cat.play('describe image', null, {
+      attachments: [{ kind: 'image', image: filePath, mediaType: 'image/png' }],
+    });
+
+    const userMessage = prompts[0].find((m) => m.role === 'user');
+    assert.ok(Array.isArray(userMessage.content));
+    const imageLikePart = userMessage.content.find((part) => part.mediaType === 'image/png');
+    assert.ok(imageLikePart);
+    assert.notEqual(imageLikePart.image ?? imageLikePart.data, filePath);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Kimten play does not auto-read directory paths as files', async () => {
+  const prompts = [];
+  const tempDir = await mkdtemp(join(tmpdir(), 'kimten-'));
+
+  try {
+    const cat = Kimten({
+      brain: createSpyModel({ text: 'ok', prompts }),
+      toys: {},
+      personality: 'helper',
+    });
+
+    await cat.play('inspect path', null, {
+      attachments: [{ kind: 'file', data: tempDir, mediaType: 'text/plain' }],
+    });
+
+    const userMessage = prompts[0].find((m) => m.role === 'user');
+    assert.ok(Array.isArray(userMessage.content));
+    const filePart = userMessage.content.find((part) => part.type === 'file');
+    assert.ok(filePart);
+    assert.equal(filePart.data, tempDir);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Kimten play accepts ArrayBuffer attachment source', async () => {
+  const prompts = [];
+  const cat = Kimten({
+    brain: createSpyModel({ text: 'ok', prompts }),
+    toys: {},
+    personality: 'helper',
+  });
+
+  const buf = new Uint8Array([1, 2, 3, 4]).buffer;
+  await cat.play('inspect bytes', null, {
+    attachments: [{ kind: 'file', data: buf, mediaType: 'application/octet-stream' }],
+  });
+
+  const userMessage = prompts[0].find((m) => m.role === 'user');
+  assert.ok(Array.isArray(userMessage.content));
+  assert.equal(userMessage.content[1].type, 'file');
+  assert.equal(userMessage.content[1].mediaType, 'application/octet-stream');
 });
 
 test('Kimten injects context into the user prompt content', async () => {

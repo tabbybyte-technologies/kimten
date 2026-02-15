@@ -1,4 +1,5 @@
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
+import type { Buffer } from 'node:buffer';
 
 export type BrainModel = Record<string, unknown>;
 
@@ -22,8 +23,31 @@ export type KimtenConfig<S extends ZodTypeAny | undefined = undefined> = {
 };
 
 export type KimtenAgent<Out = string> = {
-  play(input: string, context?: Record<string, unknown> | null): Promise<Out>;
+  play(input: string, context?: Record<string, unknown> | null, options?: PlayOptions): Promise<Out>;
   forget(): void;
+};
+
+export type KimtenAttachmentSource = string | URL | Buffer | Uint8Array | ArrayBuffer;
+
+export type KimtenAttachment =
+  | {
+      kind: 'image';
+      image: KimtenAttachmentSource;
+      mediaType?: string;
+    }
+  | {
+      kind: 'file';
+      data: KimtenAttachmentSource;
+      mediaType: string;
+      filename?: string;
+    };
+
+export type PlayOptions = {
+  attachments?: KimtenAttachment[];
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  maxOutputTokens?: number;
 };
 
 export declare function Kimten<S extends ZodTypeAny | undefined = undefined>(

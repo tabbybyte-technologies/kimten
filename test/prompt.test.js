@@ -69,6 +69,20 @@ test('buildMessagesForAgent replaces only last user message when enriched', () =
   assert.equal(out[3].content, 'ENRICHED');
 });
 
+test('buildMessagesForAgent replaces last user message with multipart content', () => {
+  const history = [
+    { role: 'system', content: 's' },
+    { role: 'user', content: 'hello' },
+  ];
+  const multipart = [
+    { type: 'text', text: 'hello' },
+    { type: 'image', image: 'https://example.com/cat.png' },
+  ];
+
+  const out = buildMessagesForAgent(history, 'hello', 'hello', multipart);
+  assert.deepEqual(out[1].content, multipart);
+});
+
 test('buildMessagesForAgent is a no-op when last message is not user', () => {
   const history = [
     { role: 'system', content: 's' },

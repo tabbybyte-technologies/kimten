@@ -24,7 +24,8 @@ It’s meant to feel like a smart helper, not a framework.
 - No planners/graphs/state machines
 - No streaming API surface
 - No persistence or long-term memory
-- No plugin system or multi-agent orchestration
+- No plugin system
+- No builtin multi-agent orchestration
 
 ---
 
@@ -156,19 +157,70 @@ Create a new instance.
 
 #### Returns
 
-* `play(input, context?)`
+* `play(input, context?, options?)`
 
-  * runs the agent  
-  * uses short-term memory automatically  
-  * returns plain text by default
-  * returns structured output only when `box` is configured during `Kimten(...)`
-  * when `box` is set, Kimten injects a concise schema hint into each call prompt to improve field-level adherence
-  * optional plain object context injected into the current call prompt as JSON (with basic redaction/truncation guards)
-  * context is ephemeral per `play()` call and is not persisted in memory
+  * 🏃 runs the agent  
+  * 🧠 uses short-term memory automatically  
+  * 💬 returns plain text by default
+  * 📦 returns structured output only when `box` is configured during `Kimten(...)`
+  * 🧩 when `box` is set, Kimten injects a concise schema hint into each call prompt to improve field-level adherence
+  * 🗂️ optional plain object context injected into the current call prompt as JSON (with basic redaction/truncation guards)
+  * 🫧 context is ephemeral per `play()` call and is not persisted in memory
+  * 🎛️ optional `options` supports attachments and generation knobs (`temperature`, `topP`, `topK`, `maxOutputTokens`)
 
 * `forget()`
 
-  * clears short-term memory
+  * 🧼 clears short-term memory
+
+##### 🖇️ Attachments (Optional)
+
+Attach images or files per call when you want Kimten to process visual/docs input.
+
+⚠️ Verify your `brain` model supports multimodal inputs (images/files); otherwise attachments may be ignored or not processed.
+
+🫧 Attachments are optional and ephemeral for each `play()` call (they are not persisted in memory).
+📂 If an attachment `image`/`data` value is a local file path string and the file exists, Kimten reads it as bytes automatically.
+
+```js
+const out = await cat.play(
+  'summarize what you see and extract key text',
+  { requestId: 'req-1' }, // context
+  {
+    attachments: [
+      { kind: 'image', image: 'https://example.com/receipt.jpg' },
+      { kind: 'file', data: 'https://example.com/invoice.pdf', mediaType: 'application/pdf', filename: 'invoice.pdf' },
+    ],
+  }
+);
+```
+
+```js
+const out = await cat.play('summarize this CV', null, {
+  attachments: [
+    { kind: 'file', data: './cv.pdf', mediaType: 'application/pdf' }, // auto-read from disk
+  ],
+});
+```
+
+##### 🎛️ Advanced generation knobs (optional)
+
+Kimten keeps this intentionally small. Supported knobs:
+
+- 🌡️ `temperature`
+- 🧪 `topP`
+- 🔢 `topK`
+- ✂️ `maxOutputTokens`
+
+```js
+const out = await cat.play('draft 3 variants', null, {
+  temperature: 0.7,
+  topP: 0.95,
+  topK: 40,
+  maxOutputTokens: 400,
+});
+```
+
+🚫 Unknown option keys are rejected to keep the API explicit and predictable.
 
 ---
 
@@ -178,7 +230,7 @@ Create a new instance.
 
 For the `brain` part, feel free to use any compatible provider and their models.
 
-⚠️ Note that not all providers (and models) may work out of the box with Kimten, particularly for structured output.
+⚠️ Note that not all providers (and models) may work out of the box with Kimten, particularly for structured output and multi modal attachments.
 
 💡 Refer to the AI SDK docs for details: **[providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models)**.
 
