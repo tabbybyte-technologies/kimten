@@ -41,6 +41,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { ToolLoopAgent } from 'ai';
 import { z } from 'zod';
 import { createMemory, MEMORY_LIMIT } from '../lib/memory.js';
 import { normalizeToys } from '../lib/tools.js';
@@ -113,6 +115,12 @@ test('createMemory clear empties history', () => {
   memory.add({ role: 'user', content: 'hello' });
   memory.clear();
   assert.deepEqual(memory.list(), []);
+});
+
+test('createMemory validates limit as positive integer', () => {
+  assert.throws(() => createMemory(0), /positive integer/i);
+  assert.throws(() => createMemory(-1), /positive integer/i);
+  assert.throws(() => createMemory(1.5), /positive integer/i);
 });
 
 test('normalizeToys supports object-form tool definitions', async () => {
@@ -191,6 +199,31 @@ test('normalizeToys validates tool description and strict types', () => {
   );
 });
 
+test('normalizeToys validates inputSchema type and non-empty tool names', () => {
+  assert.throws(
+    () =>
+      normalizeToys({
+        bad: { inputSchema: { shape: 'nope' }, async execute() {} },
+      }),
+    /inputSchema must be a Zod schema/i
+  );
+  assert.throws(
+    () =>
+      normalizeToys({
+        bad: { inputSchema: null, async execute() {} },
+      }),
+    /inputSchema must be a Zod schema/i
+  );
+
+  assert.throws(
+    () =>
+      normalizeToys({
+        '': { async execute() {} },
+      }),
+    /cannot contain an empty tool name/i
+  );
+});
+
 test('normalizeToys serializes undefined results as null', async () => {
   const wrapped = normalizeToys({
     noop: {
@@ -216,7 +249,33 @@ test('normalizeToys serializes circular tool results safely', async () => {
   });
 
   const out = await wrapped.circular.execute({});
-  assert.equal(typeof out.value, 'string');
+  assert.equal(out.self, '[Circular]');
+});
+
+test('normalizeToys serializes bigint values safely', async () => {
+  const wrapped = normalizeToys({
+    biginty: {
+      async execute() {
+        return { id: 1n };
+      },
+    },
+  });
+
+  const out = await wrapped.biginty.execute({});
+  assert.deepEqual(out, { id: '1' });
+});
+
+test('normalizeToys falls back to string value when JSON serialization is not parseable', async () => {
+  const wrapped = normalizeToys({
+    symboly: {
+      async execute() {
+        return Symbol('x');
+      },
+    },
+  });
+
+  const out = await wrapped.symboly.execute({});
+  assert.deepEqual(out, { value: 'Symbol(x)' });
 });
 
 test('Kimten validates constructor config', () => {
@@ -288,6 +347,27 @@ test('Kimten play(input) returns structured output via configured box schema', a
 
   const out = await cat.play('extract name');
   assert.deepEqual(out, { name: 'kim' });
+});
+
+test('Kimten handles blank structured text with output fallback path', async () => {
+  const originalGenerate = ToolLoopAgent.prototype.generate;
+  ToolLoopAgent.prototype.generate = async function mockedGenerate() {
+    return { text: '   ', output: { name: 'kim' } };
+  };
+
+  try {
+    const cat = Kimten({
+      brain: createFakeModel({ text: '{"name":"ignored"}' }),
+      toys: {},
+      personality: 'helper',
+      box: z.object({ name: z.string() }),
+    });
+
+    const out = await cat.play('extract name');
+    assert.deepEqual(out, { name: 'kim' });
+  } finally {
+    ToolLoopAgent.prototype.generate = originalGenerate;
+  }
 });
 
 test('Kimten injects box schema field/type hints into user prompt', async () => {
@@ -508,6 +588,26 @@ test('Kimten play rejects unknown options and invalid option values', async () =
     /"temperature" must be a number/i
   );
   await assert.rejects(
+    () => cat.play('hi', null, { temperature: Number.POSITIVE_INFINITY }),
+    /"temperature" must be a number/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { topP: -0.1 }),
+    /"topP" must be between 0 and 1/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { topP: 1.1 }),
+    /"topP" must be between 0 and 1/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { topK: 0 }),
+    /"topK" must be an integer >= 1/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { topK: 10.5 }),
+    /"topK" must be an integer >= 1/i
+  );
+  await assert.rejects(
     () => cat.play('hi', null, { maxOutputTokens: 0 }),
     /"maxOutputTokens" must be an integer >= 1/i
   );
@@ -545,11 +645,19 @@ test('Kimten play rejects invalid attachments', async () => {
     /image attachment.*invalid "mediaType"/i
   );
   await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'image', image: 'abc', mediaType: '   ' }] }),
+    /image attachment.*invalid "mediaType"/i
+  );
+  await assert.rejects(
     () => cat.play('hi', null, { attachments: [{ kind: 'file', data: 123, mediaType: 'text/plain' }] }),
     /file attachment.*must include "data"/i
   );
   await assert.rejects(
     () => cat.play('hi', null, { attachments: [{ kind: 'file', data: 'abc', mediaType: 'text/plain', filename: 123 }] }),
+    /file attachment.*invalid "filename"/i
+  );
+  await assert.rejects(
+    () => cat.play('hi', null, { attachments: [{ kind: 'file', data: 'abc', mediaType: 'text/plain', filename: '   ' }] }),
     /file attachment.*invalid "filename"/i
   );
   await assert.rejects(
@@ -818,4 +926,91 @@ test('Kimten truncates oversized context in injected prompt', async () => {
 
   assert.match(userText, /Context \(JSON\):/i);
   assert.match(userText, /\.\.\.\(truncated\)/);
+});
+
+test('Kimten does not persist failed calls to memory history', async () => {
+  const prompts = [];
+  let callCount = 0;
+  const cat = Kimten({
+    brain: {
+      specificationVersion: 'v2',
+      provider: 'test',
+      modelId: 'flaky',
+      supportedUrls: {},
+      async doGenerate(options) {
+        callCount += 1;
+        prompts.push(options.prompt);
+        if (callCount === 1) {
+          throw new Error('transient failure');
+        }
+        return {
+          finishReason: 'stop',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          content: [{ type: 'text', text: 'ok' }],
+          warnings: [],
+        };
+      },
+      async doStream() {
+        throw new Error('not used');
+      },
+    },
+    toys: {},
+    personality: 'helper',
+  });
+
+  await assert.rejects(() => cat.play('first'), /transient failure/i);
+  await cat.play('second');
+
+  assert.equal(prompts.length, 2);
+  assert.deepEqual(
+    prompts[1].map((m) => m.role),
+    ['system', 'user']
+  );
+  const secondUserText = Array.isArray(prompts[1][1].content)
+    ? prompts[1][1].content.filter((part) => part.type === 'text').map((part) => part.text).join('\n')
+    : prompts[1][1].content;
+  assert.equal(secondUserText, 'second');
+});
+
+test('Kimten serializes concurrent play calls to avoid overlapping memory writes', async () => {
+  const prompts = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const cat = Kimten({
+    brain: {
+      specificationVersion: 'v2',
+      provider: 'test',
+      modelId: 'queued',
+      supportedUrls: {},
+      async doGenerate(options) {
+        prompts.push(options.prompt);
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await delay(25);
+        inFlight -= 1;
+        return {
+          finishReason: 'stop',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          content: [{ type: 'text', text: 'ok' }],
+          warnings: [],
+        };
+      },
+      async doStream() {
+        throw new Error('not used');
+      },
+    },
+    toys: {},
+    personality: 'helper',
+  });
+
+  const [first, second] = await Promise.all([cat.play('one'), cat.play('two')]);
+  assert.equal(first, 'ok');
+  assert.equal(second, 'ok');
+  assert.equal(maxInFlight, 1);
+
+  assert.equal(prompts.length, 2);
+  assert.deepEqual(
+    prompts[1].map((m) => m.role),
+    ['system', 'user', 'assistant', 'user']
+  );
 });

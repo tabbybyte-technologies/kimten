@@ -140,6 +140,25 @@ test('serializeContext redacts secrets and handles toJSON undefined fallback', (
   assert.equal(blank, '');
 });
 
+test('serializeContext handles circular values and bigint safely', () => {
+  const circular = { id: 1n };
+  circular.self = circular;
+
+  const out = serializeContext(circular);
+  assert.match(out, /"id": "1"/);
+  assert.match(out, /"self": "\[Circular\]"/);
+});
+
+test('serializeContext returns empty string when toJSON throws', () => {
+  const out = serializeContext({
+    toJSON() {
+      throw new Error('boom');
+    },
+  });
+
+  assert.equal(out, '');
+});
+
 test('buildBoxSchemaHint handles literal, enum fallback, and union fallback branches', () => {
   const fakeLiteral = { _def: { typeName: 'ZodLiteral', value: 'ok' } };
   const fakeEnumValuesFromEntries = { _zod: { def: { type: 'enum', entries: { A: 'A', B: 'B' } } } };

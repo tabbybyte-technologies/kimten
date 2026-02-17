@@ -18,6 +18,7 @@ It’s meant to feel like a smart helper, not a framework.
 - Lets the LLM model (the `brain`) call your tool functions (the `toys`)
 - Supports optional structured output via Zod (controlled by the `box`)
 - Keeps short-term conversation memory (in-process, per instance)
+- Queues overlapping `play()` calls per cat, so memory order stays tidy and predictable
 
 ## ❌ What it does *not* do
 
@@ -203,11 +204,12 @@ Attach images or files per call when you want Kimten to process visual/docs inpu
 Kimten keeps this intentionally small. Supported knobs:
 
 - 🌡️ `temperature`
-- 🧪 `topP`
-- 🔢 `topK`
+- 🧪 `topP` (number between `0` and `1`)
+- 🔢 `topK` (integer `>= 1`)
 - ✂️ `maxOutputTokens`
 
-🚫 Unknown option keys are rejected to keep the API explicit and predictable.
+🚫 Unknown option keys get a polite hiss: Kimten keeps the API explicit and predictable.
+🚫 Wild numeric values like `Infinity` or `NaN` get swatted away.
 
 ---
 
