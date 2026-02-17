@@ -56,18 +56,6 @@ Each instance keeps short-term chat memory, so follow-up prompts naturally refer
 npm i @tabbybyte/kimten ai zod @ai-sdk/openai
 ```
 
-## 🧩 Skill Registry
-
-This repo ships a Codex-compatible skill at `skills/kimten-agent/SKILL.md`.
-
-It is structured for the [skills.sh](https://www.skills.sh/) ecosystem, so AI coding agents and IDE extensions that support Skills can install it directly from this repository path.
-
-Example install form:
-
-```text
-github.com/tabbybyte-technologies/kimten/skills/kimten-agent
-```
-
 ### Requirements
 
 - Node `>=22`
@@ -76,7 +64,7 @@ github.com/tabbybyte-technologies/kimten/skills/kimten-agent
 
 ---
 
-## 🚀 Usage
+## 🚀 Full Usage Example
 
 ```js
 import { openai } from '@ai-sdk/openai'; // or, any other provider
@@ -247,6 +235,18 @@ If you need 50+ steps, you probably want a planner, not Kimten.
 
 Fresh task? Call `forget()`.  
 Cats don’t hold grudges (or context).😽
+
+## 🧩 Skill Registry
+
+This repo ships a Codex-compatible skill at `skills/kimten-agent/SKILL.md`.
+
+It is structured for the [skills.sh](https://www.skills.sh/) ecosystem, so AI coding agents and IDE extensions that support Skills can install it directly from this repository path.
+
+Install via `npx`:
+
+```bash
+npx skills add https://github.com/tabbybyte-technologies/kimten --skill kimten-agent
+```
 
 ---
 
