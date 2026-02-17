@@ -42,12 +42,30 @@ Good fits:
 - quick AI utilities
 - “just let the model call a function” use cases
 
+Each instance keeps short-term chat memory, so follow-up prompts naturally reference earlier messages:
+
+> “summarize this” → “make it shorter” → “now extract bullets”
+
+💡 Kimten agents are tiny, single-purpose, and disposable by design. Don’t expect to rewire them at runtime; steer them by changing the input prompt or the ephemeral context object instead.
+
 ---
 
 ## 📦 Install
 
 ```bash
 npm i @tabbybyte/kimten ai zod @ai-sdk/openai
+```
+
+## 🧩 Skill Registry
+
+This repo ships a Codex-compatible skill at `skills/kimten-agent/SKILL.md`.
+
+It is structured for the [skills.sh](https://www.skills.sh/) ecosystem, so AI coding agents and IDE extensions that support Skills can install it directly from this repository path.
+
+Example install form:
+
+```text
+github.com/tabbybyte-technologies/kimten/skills/kimten-agent
 ```
 
 ### Requirements
@@ -67,6 +85,7 @@ import Kimten from '@tabbybyte/kimten';
 
 const cat = Kimten({
   brain: openai('gpt-4o-mini'), // or, any other available model
+  name: 'main-cat', // optional public tag
 
   toys: {
     randomNumber: {
@@ -91,10 +110,32 @@ const text = await cat.play('summarize this repo', {
   repo: 'tabbybyte/kimten', // ephemeral context
 });
 
+// attachments (remote URL + local file path auto-read)
+const docsSummary = await cat.play(
+  'summarize what you see and extract key text',
+  { requestId: 'req-1' }, // context
+  {
+    attachments: [
+      { kind: 'image', image: 'https://example.com/receipt.jpg' },
+      { kind: 'file', data: './cv.pdf', mediaType: 'application/pdf' }, // auto-read from disk
+    ],
+  }
+);
+
+// optional generation knobs
+const drafted = await cat.play('draft 3 variants', null, {
+  temperature: 0.7,
+  topP: 0.95,
+  topK: 40,
+  maxOutputTokens: 400,
+});
+
+// Another Kimten agent!
 const jsonCat = Kimten({
   brain: openai('gpt-4o-mini'),
+  name: 'json-cat', // optional public tag
   personality: 'You are a helpful assistant.',
-  box: z.object({ name: z.string() }), // fixed per Kimten instance
+  box: z.object({ name: z.string() }), // fixed for this instance
 });
 
 // structured output (from configured box)
@@ -102,30 +143,12 @@ const structured = await jsonCat.play('extract the name', {
   source: 'profile bio', // ephemeral context
 });
 
+console.log({ text, docsSummary, drafted, structured });
+
 // wipe short-term memory
 cat.forget();
+jsonCat.forget();
 ```
-
----
-
-## 💭 Mental Model
-
-Kimten is basically:
-
-```
-loop:
-  include short-term conversation memory
-  prompt LLM
-  maybe call a tool
-  repeat (max hops)
-return result
-```
-
-Each instance keeps short-term chat memory, so follow-up prompts naturally reference earlier messages:
-
-> “summarize this” → “make it shorter” → “now extract bullets”
-
-💡 Kimten agents are tiny, single-purpose, and disposable by design. Don’t expect to rewire them at runtime; steer them by changing the input prompt or the ephemeral context object instead.
 
 ---
 
@@ -146,6 +169,7 @@ Create a new instance.
 * 🕵️‍♂️ `personality` → system instructions / prompt for overall behavior description (default: `'You are a helpful assistant.'`)
 * 🌀 `hops` → max agent loop steps (default: `10`) - prevents infinite zoomies
 * 📦 `box` → optional Zod schema that fixes the output format for this instance
+* 🏷️ `name` → optional public instance tag (metadata only; no runtime behavior impact)
 
 #### Toy semantics
 
@@ -172,35 +196,19 @@ Create a new instance.
 
   * 🧼 clears short-term memory
 
-##### 🖇️ Attachments (Optional)
+* `name` (optional)
+
+  * 🏷️ public tag string exposed on the Kimten instance when configured
+
+##### 🖇️ Attachments (optional)
 
 Attach images or files per call when you want Kimten to process visual/docs input.
 
-⚠️ Verify your `brain` model supports multimodal inputs (images/files); otherwise attachments may be ignored or not processed.
+- ⚠️ Verify that your `brain` model supports multimodal inputs (images/files); otherwise attachments may be ignored or not processed.
 
-🫧 Attachments are optional and ephemeral for each `play()` call (they are not persisted in memory).
-📂 If an attachment `image`/`data` value is a local file path string and the file exists, Kimten reads it as bytes automatically.
+- 🫧 Attachments are optional and ephemeral for each `play()` call (they are not persisted in memory).
 
-```js
-const out = await cat.play(
-  'summarize what you see and extract key text',
-  { requestId: 'req-1' }, // context
-  {
-    attachments: [
-      { kind: 'image', image: 'https://example.com/receipt.jpg' },
-      { kind: 'file', data: 'https://example.com/invoice.pdf', mediaType: 'application/pdf', filename: 'invoice.pdf' },
-    ],
-  }
-);
-```
-
-```js
-const out = await cat.play('summarize this CV', null, {
-  attachments: [
-    { kind: 'file', data: './cv.pdf', mediaType: 'application/pdf' }, // auto-read from disk
-  ],
-});
-```
+- 📂 If an attachment `image`/`data` value is a local file path string and the file exists, Kimten reads it as bytes automatically.
 
 ##### 🎛️ Advanced generation knobs (optional)
 
@@ -210,15 +218,6 @@ Kimten keeps this intentionally small. Supported knobs:
 - 🧪 `topP`
 - 🔢 `topK`
 - ✂️ `maxOutputTokens`
-
-```js
-const out = await cat.play('draft 3 variants', null, {
-  temperature: 0.7,
-  topP: 0.95,
-  topK: 40,
-  maxOutputTokens: 400,
-});
-```
 
 🚫 Unknown option keys are rejected to keep the API explicit and predictable.
 
@@ -232,27 +231,12 @@ For the `brain` part, feel free to use any compatible provider and their models.
 
 ⚠️ Note that not all providers (and models) may work out of the box with Kimten, particularly for structured output and multi modal attachments.
 
-💡 Refer to the AI SDK docs for details: **[providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models)**.
+💡 Refer to the AI SDK docs for details: [providers and models](https://ai-sdk.dev/docs/foundations/providers-and-models).
 
 ### Add toys freely
 
-Define `toys` in object form for strong arg validation and proper selection by the LLM:
+Define `toys` in object form for strong arg validation and proper selection by the LLM.
 
-```js
-import { z } from 'zod';
-
-toys: {
-  randomNumber: {
-    description: 'Generate a random integer between min and max (inclusive).',
-    inputSchema: z.object({ min: z.number().int(), max: z.number().int() }),
-    async execute({ min, max }) {
-      const low = Math.min(min, max);
-      const high = Math.max(min, max);
-      return Math.floor(Math.random() * (high - low + 1)) + low;
-    },
-  },
-}
-```
 💡 For further details, refer to [AI SDK docs on Tools](https://ai-sdk.dev/docs/foundations/tools)
 
 ### Keep hops low

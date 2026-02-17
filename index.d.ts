@@ -17,12 +17,14 @@ export type Toys = Record<string, ToyDefinition>;
 export type KimtenConfig<S extends ZodTypeAny | undefined = undefined> = {
   brain: BrainModel;
   toys?: Toys;
+  name?: string;
   personality?: string;
   hops?: number;
   box?: S;
 };
 
 export type KimtenAgent<Out = string> = {
+  name?: string;
   play(input: string, context?: Record<string, unknown> | null, options?: PlayOptions): Promise<Out>;
   forget(): void;
 };

@@ -223,20 +223,29 @@ test('Kimten validates constructor config', () => {
   assert.throws(() => Kimten(null), /requires a config object/i);
   assert.throws(() => Kimten({ toys: {} }), /brain/i);
   assert.throws(() => Kimten({ brain: 1 }), /brain/i);
+  assert.throws(() => Kimten({ brain: {}, name: '' }), /name/i);
   assert.throws(() => Kimten({ brain: {}, toys: {}, personality: '' }), /personality/i);
   assert.throws(() => Kimten({ brain: {}, toys: {}, personality: 'x', hops: 0 }), /hops/i);
   assert.throws(() => Kimten({ brain: {}, toys: {}, box: 'bad' }), /box/i);
 });
 
-test('Kimten returns only play and forget methods', () => {
+test('Kimten returns play/forget and optional name tag', () => {
   const cat = Kimten({
     brain: createFakeModel({ text: 'ok' }),
+    toys: {},
+    personality: 'helper',
+  });
+  const namedCat = Kimten({
+    brain: createFakeModel({ text: 'ok' }),
+    name: 'alpha',
     toys: {},
     personality: 'helper',
   });
 
   const keys = Object.keys(cat).sort();
   assert.deepEqual(keys, ['forget', 'play']);
+  assert.equal(namedCat.name, 'alpha');
+  assert.deepEqual(Object.keys(namedCat).sort(), ['forget', 'name', 'play']);
 });
 
 test('Kimten play(input) enforces string input', async () => {
